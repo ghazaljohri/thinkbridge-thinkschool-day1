@@ -1,71 +1,63 @@
 using FluentAssertions;
-using QuotesApi.Models.Collections;
+using QuotesApi.Models;
 
 namespace QuotesApi.Tests.Domain;
 
-public class CollectionTests
+public class QuoteTests
 {
     [Fact]
-    public void Empty_name_should_throw()
+    public void Create_should_create_valid_quote()
     {
-        var act = () => new Collection("", 1);
+        var quote = Quote.Create("Maya Angelou", "Do the best you can.");
+
+        quote.Author.Should().Be("Maya Angelou");
+        quote.Text.Should().Be("Do the best you can.");
+        quote.IsDeleted.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Create_should_reject_empty_author()
+    {
+        var act = () => Quote.Create("", "Some quote");
 
         act.Should().Throw<ArgumentException>();
     }
 
     [Fact]
-    public void Name_over_80_characters_should_throw()
+    public void Create_should_reject_author_over_200_characters()
     {
-        var name = new string('a', 81);
+        var author = new string('A', 201);
 
-        var act = () => new Collection(name, 1);
+        var act = () => Quote.Create(author, "Some quote");
 
         act.Should().Throw<ArgumentException>();
     }
 
     [Fact]
-    public void Fifty_first_item_should_throw()
+    public void Create_should_reject_empty_text()
     {
-        var collection = new Collection("Test", 1);
+        var act = () => Quote.Create("Author", "");
 
-        for (var i = 1; i <= 50; i++)
-            collection.AddItem(i, DateTimeOffset.UtcNow);
-
-        var act = () => collection.AddItem(51, DateTimeOffset.UtcNow);
-
-        act.Should().Throw<InvalidOperationException>();
+        act.Should().Throw<ArgumentException>();
     }
 
     [Fact]
-    public void Duplicate_quote_id_should_throw()
+    public void Create_should_reject_text_over_1000_characters()
     {
-        var collection = new Collection("Test", 1);
+        var text = new string('A', 1001);
 
-        collection.AddItem(1, DateTimeOffset.UtcNow);
+        var act = () => Quote.Create("Author", text);
 
-        var act = () => collection.AddItem(1, DateTimeOffset.UtcNow);
-
-        act.Should().Throw<InvalidOperationException>();
+        act.Should().Throw<ArgumentException>();
     }
 
     [Fact]
-    public void Removing_non_existing_item_should_throw()
+    public void SoftDelete_should_mark_quote_as_deleted()
     {
-        var collection = new Collection("Test", 1);
+        var quote = Quote.Create("Author", "Some quote");
 
-        var act = () => collection.RemoveItem(99);
+        quote.SoftDelete();
 
-        act.Should().Throw<InvalidOperationException>();
-    }
-
-    [Fact]
-    public void Adding_then_removing_should_leave_zero_items()
-    {
-        var collection = new Collection("Test", 1);
-
-        collection.AddItem(1, DateTimeOffset.UtcNow);
-        collection.RemoveItem(1);
-
-        collection.Items.Should().BeEmpty();
+        quote.IsDeleted.Should().BeTrue();
     }
 }
