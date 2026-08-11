@@ -1,0 +1,22 @@
+Create a deliberately bad ASP.NET Core 10 Web API example with an OrderController.cs file of around 300 lines.
+
+The controller should contain one giant POST /api/orders action that mixes business logic, EF Core data access, validation, and HTTP response handling all inline.
+
+Intentionally include these problems:
+- four empty catch {} blocks that swallow exceptions
+- synchronous EF Core calls inside an async action
+- object return types instead of typed responses
+- no tests
+- an off-by-one bug
+- a null dereference bug
+- poor separation of concerns
+- duplicated logic
+- hard-coded values
+- weak validation
+- poor error handling
+
+Make the code compile, but keep it deliberately difficult to maintain and clearly suitable for a refactoring exercise.
+
+Create/save the result as OrderController.cs.
+
+Do NOT refactor or improve it. I need the original bad code preserved for a refactoring exercise.
