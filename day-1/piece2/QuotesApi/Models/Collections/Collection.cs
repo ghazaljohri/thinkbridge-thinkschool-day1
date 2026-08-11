@@ -23,7 +23,7 @@ public class Collection
         OwnerId = ownerId;
     }
 
-    public void AddItem(int quoteId)
+    public void AddItem(int quoteId, DateTimeOffset addedAt)
     {
         if (quoteId <= 0)
             throw new ArgumentException("QuoteId must be greater than zero.", nameof(quoteId));
@@ -34,7 +34,7 @@ public class Collection
         if (_items.Any(x => x.QuoteId == quoteId))
             throw new InvalidOperationException("The quote is already in the collection.");
 
-        _items.Add(new CollectionItem(quoteId));
+        _items.Add(new CollectionItem(quoteId, addedAt));
     }
 
     public void RemoveItem(int quoteId)

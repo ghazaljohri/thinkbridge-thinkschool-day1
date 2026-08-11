@@ -8,7 +8,7 @@ public sealed class CollectionItem
 
     private CollectionItem() { }
 
-    public CollectionItem(int quoteId)
+    public CollectionItem(int quoteId, DateTimeOffset addedAt)
     {
         if (quoteId <= 0)
             throw new ArgumentException(
@@ -16,6 +16,6 @@ public sealed class CollectionItem
                 nameof(quoteId));
 
         QuoteId = quoteId;
-        AddedAt = DateTime.UtcNow;
+        AddedAt = addedAt.UtcDateTime;
     }
 }

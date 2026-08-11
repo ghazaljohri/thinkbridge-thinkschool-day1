@@ -1,5 +1,6 @@
 using QuotesApi.Models.Collections;
 using QuotesApi.Repositories;
+using QuotesApi.Services;
 
 namespace QuotesApi.Extensions;
 
@@ -57,6 +58,7 @@ public static class CollectionEndpointExtensions
             int id,
             AddCollectionItemRequest request,
             ICollectionRepository repository,
+            IClock clock,
             CancellationToken cancellationToken) =>
         {
             var collection = await repository.GetByIdAsync(
@@ -66,7 +68,7 @@ public static class CollectionEndpointExtensions
             if (collection is null)
                 return Results.NotFound();
 
-            collection.AddItem(request.QuoteId);
+            collection.AddItem(request.QuoteId, clock.UtcNow);
 
             await repository.SaveAsync(
                 collection,
