@@ -42,39 +42,39 @@ public static class QuoteEndpointExtensions
         });
 
         app.MapPost("/api/quotes", async (
-            Quote quote,
+            CreateQuoteRequest request,
             IQuoteRepository repository,
             ILogger<Program> logger,
             CancellationToken cancellationToken) =>
         {
-            var errors = new Dictionary<string, string[]>();
+            try
+            {
+                var quote = Quote.Create(
+                    request.Author,
+                    request.Text);
 
-            if (string.IsNullOrWhiteSpace(quote.Author))
-                errors["author"] = ["Author is required."];
+                var created = await repository.AddAsync(
+                    quote,
+                    cancellationToken);
 
-            if (string.IsNullOrWhiteSpace(quote.Text))
-                errors["text"] = ["Text is required."];
+                logger.LogInformation(
+                    "Created quote {QuoteId} by {Author}",
+                    created.Id,
+                    created.Author);
 
-            if (quote.Author?.Length > 200)
-                errors["author"] = ["Author must be 200 characters or fewer."];
-
-            if (quote.Text?.Length > 1000)
-                errors["text"] = ["Text must be 1000 characters or fewer."];
-
-            if (errors.Count > 0)
-                return Results.ValidationProblem(errors);
-
-            var created = await repository.AddAsync(
-                quote, cancellationToken);
-
-            logger.LogInformation(
-                "Created quote {QuoteId} by {Author}",
-                created.Id,
-                created.Author);
-
-            return Results.Created(
-                $"/api/quotes/{created.Id}", created);
-        });
+                return Results.Created(
+                    $"/api/quotes/{created.Id}",
+                    created);
+            }
+            catch (ArgumentException ex)
+            {
+                return Results.ValidationProblem(
+                    new Dictionary<string, string[]>
+                    {
+                        [ex.ParamName ?? "request"] = [ex.Message]
+                    });
+            }
+        }).RequireAuthorization();
 
         app.MapGet("/api/quotes/{id:int}", async (
             int id,
@@ -82,7 +82,8 @@ public static class QuoteEndpointExtensions
             CancellationToken cancellationToken) =>
         {
             var quote = await repository.GetByIdAsync(
-                id, cancellationToken);
+                id,
+                cancellationToken);
 
             return quote is null
                 ? Results.NotFound()
@@ -96,14 +97,21 @@ public static class QuoteEndpointExtensions
             CancellationToken cancellationToken) =>
         {
             var deleted = await repository.DeleteAsync(
-                id, cancellationToken);
+                id,
+                cancellationToken);
 
             if (!deleted)
                 return Results.NotFound();
 
-            logger.LogInformation("Deleted quote {QuoteId}", id);
+            logger.LogInformation(
+                "Deleted quote {QuoteId}",
+                id);
 
             return Results.NoContent();
-        });
+        }).RequireAuthorization();
     }
+
+    public sealed record CreateQuoteRequest(
+        string Author,
+        string Text);
 }

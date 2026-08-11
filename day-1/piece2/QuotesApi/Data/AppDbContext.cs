@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using QuotesApi.Models;
 using QuotesApi.Models.Collections;
+using QuotesApi.Models.Auth;
 
 namespace QuotesApi.Data;
 
@@ -14,10 +15,26 @@ public class AppDbContext : DbContext
     public DbSet<Quote> Quotes => Set<Quote>();
     public DbSet<Collection> Collections => Set<Collection>();
     public DbSet<CollectionItem> CollectionItems => Set<CollectionItem>();
+    public DbSet<User> Users => Set<User>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+
+        modelBuilder.Entity<User>(entity =>
+        {
+            entity.HasKey(u => u.Id);
+
+            entity.Property(u => u.Email)
+                .IsRequired()
+                .HasMaxLength(200);
+
+            entity.Property(u => u.PasswordHash)
+                .IsRequired();
+
+            entity.HasIndex(u => u.Email)
+                .IsUnique();
+        });
 
         modelBuilder.Entity<Collection>(entity =>
         {
