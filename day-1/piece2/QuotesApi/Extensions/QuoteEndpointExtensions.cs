@@ -42,7 +42,7 @@ public static class QuoteEndpointExtensions
         });
 
         app.MapPost("/api/quotes", async (
-            CreateQuoteRequest request,
+            Quote request,
             IQuoteRepository repository,
             ILogger<Program> logger,
             CancellationToken cancellationToken) =>
@@ -111,7 +111,4 @@ public static class QuoteEndpointExtensions
         }).RequireAuthorization();
     }
 
-    public sealed record CreateQuoteRequest(
-        string Author,
-        string Text);
 }
