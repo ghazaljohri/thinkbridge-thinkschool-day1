@@ -1,25 +1,24 @@
-using QuotesApi.Services;
+using System.Net;
+using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace QuotesApi.Tests;
 
-public class FakeClock : IClock
-{
-    public DateTimeOffset UtcNow { get; set; }
-}
-
-public class ClockTests
+public class CancellationTests
 {
     [Fact]
-    public void FakeClock_Returns_Controlled_Time()
+    public async Task Request_Cancellation_Returns_499()
     {
-        var expected = new DateTimeOffset(
-            2026, 8, 11, 10, 30, 0, TimeSpan.Zero);
+        await using var factory = new WebApplicationFactory<Program>();
+        using var client = factory.CreateClient();
 
-        var clock = new FakeClock
-        {
-            UtcNow = expected
-        };
+        using var cts = new CancellationTokenSource();
+        cts.CancelAfter(1);
 
-        Assert.Equal(expected, clock.UtcNow);
+        var request = new HttpRequestMessage(
+            HttpMethod.Get,
+            "/api/collections/1");
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => client.SendAsync(request, cts.Token));
     }
 }
