@@ -1,0 +1,102 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: |
+          dotnet restore day-1/piece2/QuotesApi/QuotesApi.csproj
+          dotnet restore day-1/piece2/Quotes.Tests.Unit/Quotes.Tests.Unit.csproj
+          dotnet restore day-1/piece2/Quotes.Tests.Integration/Quotes.Tests.Integration.csproj
+
+      - name: Build
+        run: |
+          dotnet build day-1/piece2/QuotesApi/QuotesApi.csproj --no-restore
+          dotnet build day-1/piece2/Quotes.Tests.Unit/Quotes.Tests.Unit.csproj --no-restore
+          dotnet build day-1/piece2/Quotes.Tests.Integration/Quotes.Tests.Integration.csproj --no-restore
+
+      - name: Run unit tests with coverage
+        run: >
+          dotnet test
+          day-1/piece2/Quotes.Tests.Unit/Quotes.Tests.Unit.csproj
+          --no-build
+          --logger "trx;LogFileName=unit-tests.trx"
+          --collect:"XPlat Code Coverage"
+
+      - name: Run integration tests with coverage
+        run: >
+          dotnet test
+          day-1/piece2/Quotes.Tests.Integration/Quotes.Tests.Integration.csproj
+          --no-build
+          --logger "trx;LogFileName=integration-tests.trx"
+          --collect:"XPlat Code Coverage"
+
+      - name: Check 70 percent coverage
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import glob
+          import xml.etree.ElementTree as ET
+
+          files = glob.glob("**/TestResults/**/coverage.cobertura.xml", recursive=True)
+
+          if not files:
+              raise SystemExit("No coverage files were produced.")
+
+          total_valid = 0
+          total_covered = 0
+
+          for file in files:
+              root = ET.parse(file).getroot()
+              valid = int(root.attrib.get("lines-valid", 0))
+              covered = int(root.attrib.get("lines-covered", 0))
+
+              print(f"{file}: {covered}/{valid}")
+
+              total_valid += valid
+              total_covered += covered
+
+          if total_valid == 0:
+              raise SystemExit("Coverage report contains no executable lines.")
+
+          coverage = total_covered / total_valid * 100
+
+          print(f"Overall line coverage: {coverage:.2f}%")
+
+          if coverage < 70:
+              raise SystemExit(
+                  f"Coverage is below the required 70% threshold: {coverage:.2f}%"
+              )
+          PY
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: '**/TestResults/**/*.trx'
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: '**/TestResults/**/coverage.cobertura.xml'
