@@ -12,13 +12,14 @@ using QuotesApi.Models;
 
 namespace Quotes.Tests.Integration;
 
-public sealed class QuotesApiIntegrationTests
+public sealed class QuotesApiIntegrationTests(SqlServerContainerFixture sqlServer)
+    : IClassFixture<SqlServerContainerFixture>
 {
     [Fact]
     public async Task GetRoot_ApplicationStarted_ReturnsRunningMessage()
     {
         // Arrange
-        await using var factory = new QuotesApiFactory();
+        await using var factory = new QuotesApiFactory(sqlServer);
         using var client = factory.CreateClient();
 
         // Act
@@ -33,7 +34,7 @@ public sealed class QuotesApiIntegrationTests
     public async Task GetQuotes_NoAuthentication_ReturnsPagedQuotes()
     {
         // Arrange
-        await using var factory = new QuotesApiFactory();
+        await using var factory = new QuotesApiFactory(sqlServer);
         using var client = factory.CreateClient();
 
         // Act
@@ -50,7 +51,7 @@ public sealed class QuotesApiIntegrationTests
     public async Task GetQuotes_InvalidPage_ReturnsValidationProblemDetails()
     {
         // Arrange
-        await using var factory = new QuotesApiFactory();
+        await using var factory = new QuotesApiFactory(sqlServer);
         using var client = factory.CreateClient();
 
         // Act
@@ -68,7 +69,7 @@ public sealed class QuotesApiIntegrationTests
     public async Task PostQuote_NoAuthentication_ReturnsUnauthorized()
     {
         // Arrange
-        await using var factory = new QuotesApiFactory();
+        await using var factory = new QuotesApiFactory(sqlServer);
         using var client = factory.CreateClient();
 
         // Act
@@ -83,7 +84,7 @@ public sealed class QuotesApiIntegrationTests
     public async Task PostQuote_AuthenticatedWithLocalJwt_ReturnsCreated()
     {
         // Arrange
-        await using var factory = new QuotesApiFactory();
+        await using var factory = new QuotesApiFactory(sqlServer);
         using var client = factory.CreateClient();
         await AuthenticateAsync(client);
 
@@ -100,7 +101,7 @@ public sealed class QuotesApiIntegrationTests
     public async Task PostQuote_InvalidRequest_ReturnsValidationProblemDetails()
     {
         // Arrange
-        await using var factory = new QuotesApiFactory();
+        await using var factory = new QuotesApiFactory(sqlServer);
         using var client = factory.CreateClient();
         await AuthenticateAsync(client);
 
@@ -120,7 +121,7 @@ public sealed class QuotesApiIntegrationTests
     public async Task GetQuote_ExistingQuote_ReturnsQuote()
     {
         // Arrange
-        await using var factory = new QuotesApiFactory();
+        await using var factory = new QuotesApiFactory(sqlServer);
         using var client = factory.CreateClient();
         var quoteId = await SeedQuoteAsync(factory, "test@example.com", "Stored quote");
 
@@ -138,7 +139,7 @@ public sealed class QuotesApiIntegrationTests
     public async Task GetQuote_MissingQuote_ReturnsNotFound()
     {
         // Arrange
-        await using var factory = new QuotesApiFactory();
+        await using var factory = new QuotesApiFactory(sqlServer);
         using var client = factory.CreateClient();
 
         // Act
@@ -152,7 +153,7 @@ public sealed class QuotesApiIntegrationTests
     public async Task DeleteQuote_NoAuthentication_ReturnsUnauthorized()
     {
         // Arrange
-        await using var factory = new QuotesApiFactory();
+        await using var factory = new QuotesApiFactory(sqlServer);
         using var client = factory.CreateClient();
         var quoteId = await SeedQuoteAsync(factory, "test@example.com", "Stored quote");
 
@@ -167,7 +168,7 @@ public sealed class QuotesApiIntegrationTests
     public async Task DeleteQuote_AuthenticatedOwner_ReturnsNoContent()
     {
         // Arrange
-        await using var factory = new QuotesApiFactory();
+        await using var factory = new QuotesApiFactory(sqlServer);
         using var client = factory.CreateClient();
         await AuthenticateAsync(client);
         var quoteId = await SeedQuoteAsync(factory, "test@example.com", "Stored quote");
@@ -183,7 +184,7 @@ public sealed class QuotesApiIntegrationTests
     public async Task DeleteQuote_AuthenticatedNonOwner_ReturnsForbidden()
     {
         // Arrange
-        await using var factory = new QuotesApiFactory();
+        await using var factory = new QuotesApiFactory(sqlServer);
         using var client = factory.CreateClient();
         await AuthenticateAsync(client);
         var quoteId = await SeedQuoteAsync(factory, "other@example.com", "Stored quote");
@@ -199,7 +200,7 @@ public sealed class QuotesApiIntegrationTests
     public async Task PostCollection_ValidRequest_ReturnsCreated()
     {
         // Arrange
-        await using var factory = new QuotesApiFactory();
+        await using var factory = new QuotesApiFactory(sqlServer);
         using var client = factory.CreateClient();
 
         // Act
@@ -214,7 +215,7 @@ public sealed class QuotesApiIntegrationTests
     public async Task GetCollection_ExistingAndMissingCollection_ReturnsOkThenNotFound()
     {
         // Arrange
-        await using var factory = new QuotesApiFactory();
+        await using var factory = new QuotesApiFactory(sqlServer);
         using var client = factory.CreateClient();
         var created = await client.PostAsJsonAsync(
             "/api/collections", new CollectionEndpointExtensions.CollectionRequest("Favourites", 1));
@@ -233,7 +234,7 @@ public sealed class QuotesApiIntegrationTests
     public async Task PostCollectionItem_ExistingCollectionAndQuote_StoresFixedClockTimestamp()
     {
         // Arrange
-        await using var factory = new QuotesApiFactory();
+        await using var factory = new QuotesApiFactory(sqlServer);
         using var client = factory.CreateClient();
         var quoteId = await SeedQuoteAsync(factory, "test@example.com", "Stored quote");
         var collection = await client.PostAsJsonAsync(
@@ -256,7 +257,7 @@ public sealed class QuotesApiIntegrationTests
     public async Task PostCollectionItem_MissingCollection_ReturnsNotFound()
     {
         // Arrange
-        await using var factory = new QuotesApiFactory();
+        await using var factory = new QuotesApiFactory(sqlServer);
         using var client = factory.CreateClient();
 
         // Act
@@ -271,7 +272,7 @@ public sealed class QuotesApiIntegrationTests
     public async Task DeleteCollectionItem_ExistingThenMissingItem_ReturnsNoContentThenProblemDetails()
     {
         // Arrange
-        await using var factory = new QuotesApiFactory();
+        await using var factory = new QuotesApiFactory(sqlServer);
         using var client = factory.CreateClient();
         var quoteId = await SeedQuoteAsync(factory, "test@example.com", "Stored quote");
         var collection = await client.PostAsJsonAsync(
@@ -295,7 +296,7 @@ public sealed class QuotesApiIntegrationTests
     public async Task Login_ValidAndInvalidCredentials_ReturnsOkThenUnauthorized()
     {
         // Arrange
-        await using var factory = new QuotesApiFactory();
+        await using var factory = new QuotesApiFactory(sqlServer);
         using var client = factory.CreateClient();
 
         // Act
@@ -313,7 +314,7 @@ public sealed class QuotesApiIntegrationTests
     public async Task Refresh_ValidThenReusedToken_ReturnsOkThenUnauthorized()
     {
         // Arrange
-        await using var factory = new QuotesApiFactory();
+        await using var factory = new QuotesApiFactory(sqlServer);
         using var client = factory.CreateClient();
         var login = await LoginAsync(client);
 
@@ -332,7 +333,7 @@ public sealed class QuotesApiIntegrationTests
     public async Task Database_ApplicationStarted_AppliesMigrations()
     {
         // Arrange
-        await using var factory = new QuotesApiFactory();
+        await using var factory = new QuotesApiFactory(sqlServer);
         using var scope = factory.Services.CreateScope();
         var database = scope.ServiceProvider.GetRequiredService<AppDbContext>().Database;
 

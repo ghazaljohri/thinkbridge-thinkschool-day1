@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Data.Sqlite;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -10,22 +10,23 @@ using QuotesApi.Services;
 
 namespace Quotes.Tests.Integration;
 
-public sealed class QuotesApiFactory : WebApplicationFactory<Program>
+public sealed class QuotesApiFactory(SqlServerContainerFixture sqlServer) : WebApplicationFactory<Program>
 {
-    private readonly SqliteConnection _connection = new("Data Source=:memory:");
-
     public static readonly DateTimeOffset FixedUtcNow =
         new(2026, 8, 12, 10, 30, 0, TimeSpan.Zero);
 
+    private readonly string _connectionString = CreateDatabaseConnectionString(sqlServer.ConnectionString);
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
-        _connection.Open();
-
         builder.ConfigureServices(services =>
         {
             services.RemoveAll<DbContextOptions<AppDbContext>>();
             services.RemoveAll<AppDbContext>();
-            services.AddDbContext<AppDbContext>(options => options.UseSqlite(_connection));
+            services.AddDbContext<AppDbContext>(options => options.UseSqlServer(
+                _connectionString,
+                sqlServerOptions => sqlServerOptions.MigrationsAssembly(
+                    typeof(SqlServerMigrationsMarker).Assembly.FullName)));
 
             services.RemoveAll<IClock>();
             services.AddSingleton<IClock>(new FixedClock(FixedUtcNow));
@@ -42,12 +43,14 @@ public sealed class QuotesApiFactory : WebApplicationFactory<Program>
         return host;
     }
 
-    protected override void Dispose(bool disposing)
+    private static string CreateDatabaseConnectionString(string containerConnectionString)
     {
-        base.Dispose(disposing);
+        var builder = new SqlConnectionStringBuilder(containerConnectionString)
+        {
+            InitialCatalog = $"QuotesApiIntegration_{Guid.NewGuid():N}"
+        };
 
-        if (disposing)
-            _connection.Dispose();
+        return builder.ConnectionString;
     }
 
     private sealed class FixedClock(DateTimeOffset utcNow) : IClock
