@@ -2,11 +2,58 @@ using QuotesApi.Services.Auth;
 using QuotesApi.Extensions;
 using QuotesApi.Authorization;
 using Microsoft.AspNetCore.Diagnostics;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddAuthentication("Bearer")
-    .AddJwtBearer("Bearer", options =>
+const string localJwtScheme = "LocalJwt";
+const string entraJwtScheme = "EntraJwt";
+const string bearerScheme = "Bearer";
+
+var entraTenantId = builder.Configuration["Entra:TenantId"]
+    ?? throw new InvalidOperationException("Entra tenant ID is not configured.");
+var entraClientId = builder.Configuration["Entra:ClientId"]
+    ?? throw new InvalidOperationException("Entra client ID is not configured.");
+var entraAudience = builder.Configuration["Entra:Audience"]
+    ?? $"api://{entraClientId}";
+var entraAuthority = $"https://login.microsoftonline.com/{entraTenantId}/v2.0";
+
+builder.Services.AddAuthentication(options =>
+    {
+        options.DefaultAuthenticateScheme = bearerScheme;
+        options.DefaultChallengeScheme = bearerScheme;
+    })
+    .AddPolicyScheme(bearerScheme, "Selects local or Microsoft Entra JWT validation", options =>
+    {
+        options.ForwardDefaultSelector = context =>
+        {
+            var authorization = context.Request.Headers.Authorization.ToString();
+            var token = authorization.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
+                ? authorization["Bearer ".Length..].Trim()
+                : null;
+
+            if (!string.IsNullOrWhiteSpace(token))
+            {
+                try
+                {
+                    var issuer = new JwtSecurityTokenHandler().ReadJwtToken(token).Issuer;
+
+                    if (string.Equals(issuer, entraAuthority, StringComparison.OrdinalIgnoreCase))
+                        return entraJwtScheme;
+                }
+                catch (ArgumentException)
+                {
+                    // Let the local handler return the standard authentication failure response.
+                }
+            }
+
+            return localJwtScheme;
+        };
+    })
+    .AddJwtBearer(localJwtScheme, options =>
     {
         var key = builder.Configuration["Jwt:Key"]
             ?? throw new InvalidOperationException("JWT key is not configured.");
@@ -20,6 +67,33 @@ builder.Services.AddAuthentication("Bearer")
             ValidateAudience = false,
             ValidateLifetime = true,
             ClockSkew = TimeSpan.Zero
+        };
+    })
+    .AddJwtBearer(entraJwtScheme, options =>
+    {
+        options.Authority = entraAuthority;
+        options.TokenValidationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters
+        {
+            ValidAudience = entraAudience,
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true
+        };
+
+        options.Events = new JwtBearerEvents
+        {
+            OnTokenValidated = context =>
+            {
+                var scope = context.Principal?.FindFirst("scp")?.Value;
+
+                if (!string.IsNullOrWhiteSpace(scope) && context.Principal?.Identity is ClaimsIdentity identity)
+                {
+                    foreach (var value in scope.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+                        identity.AddClaim(new Claim("scope", value));
+                }
+
+                return Task.CompletedTask;
+            }
         };
     });
 

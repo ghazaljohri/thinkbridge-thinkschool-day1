@@ -1,11 +1,16 @@
+using System.IdentityModel.Tokens.Jwt;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Security.Claims;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.IdentityModel.Tokens;
 using QuotesApi.Data;
 using QuotesApi.Extensions;
 using QuotesApi.Models;
@@ -71,6 +76,23 @@ public sealed class QuotesApiIntegrationTests(SqlServerContainerFixture sqlServe
         // Arrange
         await using var factory = new QuotesApiFactory(sqlServer);
         using var client = factory.CreateClient();
+
+        // Act
+        var response = await client.PostAsJsonAsync(
+            "/api/quotes", new QuoteEndpointExtensions.QuoteRequest("test@example.com", "A quote"));
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task PostQuote_ExpiredLocalJwt_ReturnsUnauthorized()
+    {
+        // Arrange
+        await using var factory = new QuotesApiFactory(sqlServer);
+        using var client = factory.CreateClient();
+        var expiredToken = CreateExpiredLocalAccessToken(factory);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", expiredToken);
 
         // Act
         var response = await client.PostAsJsonAsync(
@@ -369,6 +391,30 @@ public sealed class QuotesApiIntegrationTests(SqlServerContainerFixture sqlServe
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         token.Should().NotBeNull();
         return token!;
+    }
+
+    private static string CreateExpiredLocalAccessToken(QuotesApiFactory factory)
+    {
+        // Arrange
+        using var scope = factory.Services.CreateScope();
+        var key = scope.ServiceProvider.GetRequiredService<IConfiguration>()["Jwt:Key"]!;
+        var credentials = new SigningCredentials(
+            new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key)),
+            SecurityAlgorithms.HmacSha256);
+        var claims = new[]
+        {
+            new Claim(JwtRegisteredClaimNames.Sub, "1"),
+            new Claim(JwtRegisteredClaimNames.Email, "test@example.com"),
+            new Claim("scope", "quotes.write")
+        };
+
+        // Act
+        var token = new JwtSecurityToken(
+            claims: claims,
+            expires: DateTime.UtcNow.AddMinutes(-5),
+            signingCredentials: credentials);
+
+        return new JwtSecurityTokenHandler().WriteToken(token);
     }
 
     private static async Task<int> SeedQuoteAsync(QuotesApiFactory factory, string author, string text)
