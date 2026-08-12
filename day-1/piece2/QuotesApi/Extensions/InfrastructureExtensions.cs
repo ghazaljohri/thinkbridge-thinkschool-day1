@@ -11,8 +11,11 @@ public static class InfrastructureExtensions
         this IServiceCollection services,
         IConfiguration configuration)
     {
+        var connectionString = configuration.GetConnectionString("DefaultConnection")
+            ?? "Data Source=quotes.db";
+
         services.AddDbContext<AppDbContext>(options =>
-            options.UseSqlite("Data Source=quotes.db"));
+            options.UseSqlite(connectionString));
 
         services.AddScoped<IQuoteRepository, QuoteRepository>();
         services.AddScoped<ICollectionRepository, CollectionRepository>();

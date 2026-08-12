@@ -16,7 +16,8 @@ public sealed class JwtTokenService(IConfiguration configuration)
         var claims = new[]
         {
             new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
-            new Claim(JwtRegisteredClaimNames.Email, user.Email)
+            new Claim(JwtRegisteredClaimNames.Email, user.Email),
+            new Claim("scope", "quotes.write")
         };
 
         var credentials = new SigningCredentials(

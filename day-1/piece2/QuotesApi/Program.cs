@@ -1,5 +1,6 @@
 using QuotesApi.Services.Auth;
 using QuotesApi.Extensions;
+using QuotesApi.Authorization;
 using Microsoft.AspNetCore.Diagnostics;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -22,7 +23,21 @@ builder.Services.AddAuthentication("Bearer")
         };
     });
 
-builder.Services.AddAuthorization();
+builder.Services.AddScoped<Microsoft.AspNetCore.Authorization.IAuthorizationHandler,
+    CanDeleteOwnQuoteHandler>();
+
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("can-edit-quotes", policy =>
+    {
+        policy.RequireClaim("scope", "quotes.write");
+    });
+
+    options.AddPolicy("can-delete-own-quote", policy =>
+    {
+        policy.Requirements.Add(new CanDeleteOwnQuoteRequirement());
+    });
+});
 
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();

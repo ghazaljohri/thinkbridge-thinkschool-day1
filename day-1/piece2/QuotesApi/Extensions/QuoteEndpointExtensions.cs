@@ -1,4 +1,5 @@
 using QuotesApi.Models;
+using Microsoft.AspNetCore.Authorization;
 using QuotesApi.Repositories;
 
 namespace QuotesApi.Extensions;
@@ -42,7 +43,7 @@ public static class QuoteEndpointExtensions
         });
 
         app.MapPost("/api/quotes", async (
-            Quote request,
+            QuoteRequest request,
             IQuoteRepository repository,
             ILogger<Program> logger,
             CancellationToken cancellationToken) =>
@@ -74,7 +75,7 @@ public static class QuoteEndpointExtensions
                         [ex.ParamName ?? "request"] = [ex.Message]
                     });
             }
-        }).RequireAuthorization();
+        }).RequireAuthorization("can-edit-quotes");
 
         app.MapGet("/api/quotes/{id:int}", async (
             int id,
@@ -93,9 +94,26 @@ public static class QuoteEndpointExtensions
         app.MapDelete("/api/quotes/{id:int}", async (
             int id,
             IQuoteRepository repository,
+            IAuthorizationService authorizationService,
+            HttpContext httpContext,
             ILogger<Program> logger,
             CancellationToken cancellationToken) =>
         {
+            var quote = await repository.GetByIdAsync(
+                id,
+                cancellationToken);
+
+            if (quote is null)
+                return Results.NotFound();
+
+            var authorizationResult = await authorizationService.AuthorizeAsync(
+                httpContext.User,
+                quote,
+                "can-delete-own-quote");
+
+            if (!authorizationResult.Succeeded)
+                return Results.Forbid();
+
             var deleted = await repository.DeleteAsync(
                 id,
                 cancellationToken);
@@ -111,4 +129,7 @@ public static class QuoteEndpointExtensions
         }).RequireAuthorization();
     }
 
+    public sealed record QuoteRequest(
+        string Author,
+        string Text);
 }
