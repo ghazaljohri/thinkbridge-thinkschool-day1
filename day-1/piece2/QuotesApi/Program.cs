@@ -13,31 +13,17 @@ using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 using Serilog;
 using Serilog.Context;
+using Serilog.Sinks.ApplicationInsights.TelemetryConverters;
 
 var builder = WebApplication.CreateBuilder(args);
-
-// preserveStaticLogger avoids repeatedly overwriting the global Serilog.Log.Logger,
-// since integration tests build many hosts from this same Program in one process.
-builder.Host.UseSerilog((context, services, configuration) => configuration
-    .ReadFrom.Configuration(context.Configuration)
-    .ReadFrom.Services(services)
-    .Enrich.FromLogContext(),
-    preserveStaticLogger: true);
-
-var openTelemetryBuilder = builder.Services.AddOpenTelemetry()
-    .ConfigureResource(resource => resource.AddService(QuotesApiActivitySource.Name))
-    .WithTracing(tracing => tracing
-        .AddSource(QuotesApiActivitySource.Name)
-        .AddAspNetCoreInstrumentation()
-        .AddEntityFrameworkCoreInstrumentation()
-        .AddHttpClientInstrumentation()
-        .AddOtlpExporter());
 
 // KeyVault:Uri is intentionally absent from every checked-in appsettings file - it's
 // set only via the KeyVault__Uri environment variable for local runs against real
 // Azure Monitor. Left unset (as in tests and CI), no Key Vault call is made at all,
-// so this can't add latency or an Azure dependency to the test suite.
+// so this can't add latency or an Azure dependency to the test suite. Fetched before
+// UseSerilog/UseAzureMonitor below since both need it.
 var keyVaultUri = builder.Configuration["KeyVault:Uri"];
+string? appInsightsConnectionString = null;
 
 if (!string.IsNullOrWhiteSpace(keyVaultUri))
 {
@@ -52,9 +38,48 @@ if (!string.IsNullOrWhiteSpace(keyVaultUri))
 
     var secretClient = new SecretClient(new Uri(keyVaultUri), credential);
     var connectionStringSecret = await secretClient.GetSecretAsync("AppInsights-ConnectionString");
+    appInsightsConnectionString = connectionStringSecret.Value.Value;
+}
 
+// preserveStaticLogger avoids repeatedly overwriting the global Serilog.Log.Logger,
+// since integration tests build many hosts from this same Program in one process.
+// Once UseSerilog runs, Serilog becomes the *sole* Microsoft.Extensions.Logging
+// pipeline and never forwards events to other registered ILoggerProviders - so the
+// OpenTelemetry logging provider UseAzureMonitor() registers below never receives
+// anything, confirmed by disabling Serilog entirely and watching logs immediately
+// start reaching Application Insights. Rather than fight that, logs reach Azure
+// Monitor via Serilog's own native ApplicationInsights sink instead - traces and
+// metrics still flow through the OpenTelemetry/UseAzureMonitor pipeline below,
+// which works correctly since it doesn't depend on Microsoft.Extensions.Logging.
+builder.Host.UseSerilog((context, services, configuration) =>
+{
+    configuration
+        .ReadFrom.Configuration(context.Configuration)
+        .ReadFrom.Services(services)
+        .Enrich.FromLogContext();
+
+    if (!string.IsNullOrWhiteSpace(appInsightsConnectionString))
+    {
+        configuration.WriteTo.ApplicationInsights(
+            appInsightsConnectionString,
+            new TraceTelemetryConverter());
+    }
+},
+preserveStaticLogger: true);
+
+var openTelemetryBuilder = builder.Services.AddOpenTelemetry()
+    .ConfigureResource(resource => resource.AddService(QuotesApiActivitySource.Name))
+    .WithTracing(tracing => tracing
+        .AddSource(QuotesApiActivitySource.Name)
+        .AddAspNetCoreInstrumentation()
+        .AddEntityFrameworkCoreInstrumentation()
+        .AddHttpClientInstrumentation()
+        .AddOtlpExporter());
+
+if (!string.IsNullOrWhiteSpace(appInsightsConnectionString))
+{
     openTelemetryBuilder.UseAzureMonitor(options =>
-        options.ConnectionString = connectionStringSecret.Value.Value);
+        options.ConnectionString = appInsightsConnectionString);
 }
 
 const string localJwtScheme = "LocalJwt";
