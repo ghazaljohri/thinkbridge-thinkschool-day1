@@ -4,8 +4,18 @@ using QuotesApi.Authorization;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Serilog;
+using Serilog.Context;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// preserveStaticLogger avoids repeatedly overwriting the global Serilog.Log.Logger,
+// since integration tests build many hosts from this same Program in one process.
+builder.Host.UseSerilog((context, services, configuration) => configuration
+    .ReadFrom.Configuration(context.Configuration)
+    .ReadFrom.Services(services)
+    .Enrich.FromLogContext(),
+    preserveStaticLogger: true);
 
 const string localJwtScheme = "LocalJwt";
 const string entraJwtScheme = "EntraJwt";
@@ -92,6 +102,21 @@ builder.Services.AddScoped<JwtTokenService>();
 builder.Services.AddScoped<RefreshTokenService>();
 
 var app = builder.Build();
+
+app.Use((context, next) =>
+{
+    using (LogContext.PushProperty("TraceId", context.TraceIdentifier))
+        return next();
+});
+
+// UseSerilogRequestLogging defaults to Serilog.Log.Logger (the static ambient logger),
+// which preserveStaticLogger deliberately leaves unconfigured. Bind it explicitly to
+// this host's own scoped logger so each of the many hosts our tests spin up logs to
+// itself rather than fighting over the static logger.
+app.UseSerilogRequestLogging(options =>
+{
+    options.Logger = app.Services.GetRequiredService<Serilog.ILogger>();
+});
 
 app.UseExceptionHandler();
 
