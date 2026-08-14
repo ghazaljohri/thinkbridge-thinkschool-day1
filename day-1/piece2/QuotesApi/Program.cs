@@ -1,9 +1,12 @@
+using QuotesApi.Services;
 using QuotesApi.Services.Auth;
 using QuotesApi.Extensions;
 using QuotesApi.Authorization;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
 using Serilog;
 using Serilog.Context;
 
@@ -16,6 +19,15 @@ builder.Host.UseSerilog((context, services, configuration) => configuration
     .ReadFrom.Services(services)
     .Enrich.FromLogContext(),
     preserveStaticLogger: true);
+
+builder.Services.AddOpenTelemetry()
+    .ConfigureResource(resource => resource.AddService(QuotesApiActivitySource.Name))
+    .WithTracing(tracing => tracing
+        .AddSource(QuotesApiActivitySource.Name)
+        .AddAspNetCoreInstrumentation()
+        .AddEntityFrameworkCoreInstrumentation()
+        .AddHttpClientInstrumentation()
+        .AddOtlpExporter());
 
 const string localJwtScheme = "LocalJwt";
 const string entraJwtScheme = "EntraJwt";

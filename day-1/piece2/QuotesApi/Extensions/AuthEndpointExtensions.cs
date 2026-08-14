@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using QuotesApi.Data;
 using QuotesApi.Models.Auth;
+using QuotesApi.Services;
 using QuotesApi.Services.Auth;
 
 namespace QuotesApi.Extensions;
@@ -21,13 +22,18 @@ public static class AuthEndpointExtensions
                     u => u.Email == request.Email,
                     cancellationToken);
 
-            if (user is null ||
-                !BCrypt.Net.BCrypt.Verify(
-                    request.Password,
-                    user.PasswordHash))
-            {
+            if (user is null)
                 return Results.Unauthorized();
+
+            bool passwordValid;
+            using (var activity = QuotesApiActivitySource.Source.StartActivity("verify-password"))
+            {
+                activity?.SetTag("user.id", user.Id);
+                passwordValid = BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash);
             }
+
+            if (!passwordValid)
+                return Results.Unauthorized();
 
             var accessToken = tokenService.CreateAccessToken(user);
             var refreshToken = refreshTokenService.GenerateToken();
