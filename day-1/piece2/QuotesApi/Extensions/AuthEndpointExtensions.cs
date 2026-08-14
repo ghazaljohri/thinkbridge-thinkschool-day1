@@ -68,13 +68,12 @@ public static class AuthEndpointExtensions
                 return Results.Unauthorized();
             }
 
+            // RefreshTokens.UserId has a cascade-delete FK to Users, so a stored token
+            // that is unexpired and unrevoked is guaranteed to reference an existing user.
             var user = await db.Users
-                .SingleOrDefaultAsync(
+                .SingleAsync(
                     u => u.Id == storedToken.UserId,
                     cancellationToken);
-
-            if (user is null)
-                return Results.Unauthorized();
 
             var newAccessToken = tokenService.CreateAccessToken(user);
             var newRefreshToken = refreshTokenService.GenerateToken();

@@ -103,6 +103,23 @@ public sealed class QuotesApiIntegrationTests(SqlServerContainerFixture sqlServe
     }
 
     [Fact]
+    public async Task PostQuote_EntraShapedToken_RoutesToEntraValidationAndReturnsUnauthorized()
+    {
+        // Arrange
+        await using var factory = new QuotesApiFactory(sqlServer);
+        using var client = factory.CreateClient();
+        var entraShapedToken = CreateEntraShapedAccessToken(factory);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", entraShapedToken);
+
+        // Act
+        var response = await client.PostAsJsonAsync(
+            "/api/quotes", new QuoteEndpointExtensions.QuoteRequest("test@example.com", "A quote"));
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
     public async Task PostQuote_AuthenticatedWithLocalJwt_ReturnsCreated()
     {
         // Arrange
@@ -414,6 +431,18 @@ public sealed class QuotesApiIntegrationTests(SqlServerContainerFixture sqlServe
             expires: DateTime.UtcNow.AddMinutes(-5),
             signingCredentials: credentials);
 
+        return new JwtSecurityTokenHandler().WriteToken(token);
+    }
+
+    private static string CreateEntraShapedAccessToken(QuotesApiFactory factory)
+    {
+        // Arrange
+        using var scope = factory.Services.CreateScope();
+        var tenantId = scope.ServiceProvider.GetRequiredService<IConfiguration>()["Entra:TenantId"]!;
+        var entraAuthority = $"https://login.microsoftonline.com/{tenantId}/v2.0";
+
+        // Act
+        var token = new JwtSecurityToken(issuer: entraAuthority, claims: []);
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
 

@@ -4,8 +4,6 @@ using QuotesApi.Authorization;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -28,30 +26,11 @@ builder.Services.AddAuthentication(options =>
     })
     .AddPolicyScheme(bearerScheme, "Selects local or Microsoft Entra JWT validation", options =>
     {
-        options.ForwardDefaultSelector = context =>
-        {
-            var authorization = context.Request.Headers.Authorization.ToString();
-            var token = authorization.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
-                ? authorization["Bearer ".Length..].Trim()
-                : null;
-
-            if (!string.IsNullOrWhiteSpace(token))
-            {
-                try
-                {
-                    var issuer = new JwtSecurityTokenHandler().ReadJwtToken(token).Issuer;
-
-                    if (string.Equals(issuer, entraAuthority, StringComparison.OrdinalIgnoreCase))
-                        return entraJwtScheme;
-                }
-                catch (ArgumentException)
-                {
-                    // Let the local handler return the standard authentication failure response.
-                }
-            }
-
-            return localJwtScheme;
-        };
+        options.ForwardDefaultSelector = context => AuthSchemeSelector.SelectScheme(
+            context.Request.Headers.Authorization.ToString(),
+            entraAuthority,
+            localJwtScheme,
+            entraJwtScheme);
     })
     .AddJwtBearer(localJwtScheme, options =>
     {
@@ -84,14 +63,7 @@ builder.Services.AddAuthentication(options =>
         {
             OnTokenValidated = context =>
             {
-                var scope = context.Principal?.FindFirst("scp")?.Value;
-
-                if (!string.IsNullOrWhiteSpace(scope) && context.Principal?.Identity is ClaimsIdentity identity)
-                {
-                    foreach (var value in scope.Split(' ', StringSplitOptions.RemoveEmptyEntries))
-                        identity.AddClaim(new Claim("scope", value));
-                }
-
+                EntraClaimsTransformer.ApplyScopeClaims(context.Principal);
                 return Task.CompletedTask;
             }
         };
