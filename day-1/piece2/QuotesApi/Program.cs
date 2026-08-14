@@ -1,3 +1,7 @@
+using Azure.Core;
+using Azure.Identity;
+using Azure.Monitor.OpenTelemetry.AspNetCore;
+using Azure.Security.KeyVault.Secrets;
 using QuotesApi.Services;
 using QuotesApi.Services.Auth;
 using QuotesApi.Extensions;
@@ -20,7 +24,7 @@ builder.Host.UseSerilog((context, services, configuration) => configuration
     .Enrich.FromLogContext(),
     preserveStaticLogger: true);
 
-builder.Services.AddOpenTelemetry()
+var openTelemetryBuilder = builder.Services.AddOpenTelemetry()
     .ConfigureResource(resource => resource.AddService(QuotesApiActivitySource.Name))
     .WithTracing(tracing => tracing
         .AddSource(QuotesApiActivitySource.Name)
@@ -28,6 +32,30 @@ builder.Services.AddOpenTelemetry()
         .AddEntityFrameworkCoreInstrumentation()
         .AddHttpClientInstrumentation()
         .AddOtlpExporter());
+
+// KeyVault:Uri is intentionally absent from every checked-in appsettings file - it's
+// set only via the KeyVault__Uri environment variable for local runs against real
+// Azure Monitor. Left unset (as in tests and CI), no Key Vault call is made at all,
+// so this can't add latency or an Azure dependency to the test suite.
+var keyVaultUri = builder.Configuration["KeyVault:Uri"];
+
+if (!string.IsNullOrWhiteSpace(keyVaultUri))
+{
+    // DefaultAzureCredential probes Managed Identity first, which means reaching the
+    // Azure Instance Metadata Service - on a real Azure host that resolves almost
+    // instantly, but on a local dev machine with no IMDS it hangs for minutes before
+    // timing out. In Development, skip straight to the Azure CLI credential from
+    // `az login`; DefaultAzureCredential remains correct for actual Azure hosting.
+    TokenCredential credential = builder.Environment.IsDevelopment()
+        ? new AzureCliCredential()
+        : new DefaultAzureCredential();
+
+    var secretClient = new SecretClient(new Uri(keyVaultUri), credential);
+    var connectionStringSecret = await secretClient.GetSecretAsync("AppInsights-ConnectionString");
+
+    openTelemetryBuilder.UseAzureMonitor(options =>
+        options.ConnectionString = connectionStringSecret.Value.Value);
+}
 
 const string localJwtScheme = "LocalJwt";
 const string entraJwtScheme = "EntraJwt";
