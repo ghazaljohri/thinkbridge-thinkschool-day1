@@ -42,7 +42,8 @@ public class AppDbContext : DbContext
             entity.HasKey(r => r.Id);
 
             entity.Property(r => r.Token)
-                .IsRequired();
+                .IsRequired()
+                .HasMaxLength(256);
 
             entity.HasIndex(r => r.Token)
                 .IsUnique();
