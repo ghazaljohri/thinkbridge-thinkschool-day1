@@ -1,17 +1,23 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using QuotesApi.Models.Auth;
+using QuotesApi.Options;
 
 namespace QuotesApi.Services.Auth;
 
-public sealed class JwtTokenService(IConfiguration configuration)
+// Scoped (per-request): IOptionsSnapshot re-reads configuration each request, so a
+// config change is picked up on the next request without restarting the app.
+public sealed class JwtTokenService(IOptionsSnapshot<JwtOptions> jwtOptions)
 {
     public string CreateAccessToken(User user)
     {
-        var key = configuration["Jwt:Key"]
-            ?? throw new InvalidOperationException("JWT key is not configured.");
+        var options = jwtOptions.Value;
+
+        if (string.IsNullOrWhiteSpace(options.SigningKey))
+            throw new InvalidOperationException("JWT signing key is not configured.");
 
         var claims = new[]
         {
@@ -21,12 +27,12 @@ public sealed class JwtTokenService(IConfiguration configuration)
         };
 
         var credentials = new SigningCredentials(
-            new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key)),
+            new SymmetricSecurityKey(Encoding.UTF8.GetBytes(options.SigningKey)),
             SecurityAlgorithms.HmacSha256);
 
         var token = new JwtSecurityToken(
             claims: claims,
-            expires: DateTime.UtcNow.AddMinutes(30),
+            expires: DateTime.UtcNow.Add(options.AccessTokenLifetime),
             signingCredentials: credentials);
 
         return new JwtSecurityTokenHandler().WriteToken(token);

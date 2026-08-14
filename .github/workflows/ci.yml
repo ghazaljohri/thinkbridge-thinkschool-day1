@@ -11,6 +11,11 @@ on:
 jobs:
   build-test:
     runs-on: ubuntu-latest
+    env:
+      # Jwt:SigningKey never lives in appsettings.json or this file - it's a repo
+      # secret, injected as an env var (the highest-precedence config source),
+      # mirroring how a real deployment would supply it via a Key Vault reference.
+      Jwt__SigningKey: ${{ secrets.JWT_SIGNING_KEY }}
 
     steps:
       - name: Checkout

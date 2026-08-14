@@ -2,6 +2,7 @@ using Azure.Core;
 using Azure.Identity;
 using Azure.Monitor.OpenTelemetry.AspNetCore;
 using Azure.Security.KeyVault.Secrets;
+using QuotesApi.Options;
 using QuotesApi.Services;
 using QuotesApi.Services.Auth;
 using QuotesApi.Extensions;
@@ -9,6 +10,7 @@ using QuotesApi.Authorization;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.Extensions.Options;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 using Serilog;
@@ -86,49 +88,74 @@ const string localJwtScheme = "LocalJwt";
 const string entraJwtScheme = "EntraJwt";
 const string bearerScheme = "Bearer";
 
-var entraTenantId = builder.Configuration["Entra:TenantId"]
-    ?? throw new InvalidOperationException("Entra tenant ID is not configured.");
-var entraClientId = builder.Configuration["Entra:ClientId"]
-    ?? throw new InvalidOperationException("Entra client ID is not configured.");
-var entraAudience = builder.Configuration["Entra:Audience"]
-    ?? $"api://{entraClientId}";
-var entraAuthority = $"https://login.microsoftonline.com/{entraTenantId}/v2.0";
+// Jwt:SigningKey is a secret and never lives in appsettings.json - locally it comes
+// from `dotnet user-secrets set Jwt:SigningKey ...`; in production, an env var
+// (Jwt__SigningKey) holding a Key Vault reference that the hosting platform resolves
+// before the app ever sees it. AccessTokenLifetime/RefreshTokenLifetime aren't
+// secrets, so they're plain values in appsettings.json.
+// ValidateOnStart fails fast at startup with a clear error if a required value is
+// missing, instead of surfacing a confusing failure later the first time the option
+// is actually resolved (e.g. on the first Entra-scheme request).
+builder.Services.AddOptions<JwtOptions>()
+    .Bind(builder.Configuration.GetSection("Jwt"))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+
+builder.Services.AddOptions<EntraOptions>()
+    .Bind(builder.Configuration.GetSection("Entra"))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
 
 builder.Services.AddAuthentication(options =>
     {
         options.DefaultAuthenticateScheme = bearerScheme;
         options.DefaultChallengeScheme = bearerScheme;
     })
-    .AddPolicyScheme(bearerScheme, "Selects local or Microsoft Entra JWT validation", options =>
+    .AddPolicyScheme(bearerScheme, "Selects local or Microsoft Entra JWT validation", _ => { })
+    .AddJwtBearer(localJwtScheme)
+    .AddJwtBearer(entraJwtScheme);
+
+// PolicySchemeOptions/JwtBearerOptions are framework-managed via IOptionsMonitor
+// internally and rebuilt whenever the underlying options change, so configuring them
+// from IOptionsMonitor<TOptions> here means a config change (e.g. a rotated Entra
+// tenant) is picked up next time these options are resolved - not frozen at the value
+// captured when the process started, the way a plain local variable would be.
+builder.Services.AddOptions<PolicySchemeOptions>(bearerScheme)
+    .Configure<IOptionsMonitor<EntraOptions>>((options, entraMonitor) =>
     {
         options.ForwardDefaultSelector = context => AuthSchemeSelector.SelectScheme(
             context.Request.Headers.Authorization.ToString(),
-            entraAuthority,
+            entraMonitor.CurrentValue.Authority,
             localJwtScheme,
             entraJwtScheme);
-    })
-    .AddJwtBearer(localJwtScheme, options =>
-    {
-        var key = builder.Configuration["Jwt:Key"]
-            ?? throw new InvalidOperationException("JWT key is not configured.");
+    });
 
+builder.Services.AddOptions<JwtBearerOptions>(localJwtScheme)
+    .Configure<IOptionsMonitor<JwtOptions>>((options, jwtMonitor) =>
+    {
+        // ValidateOnStart on JwtOptions above already guarantees SigningKey is
+        // non-empty by the time anything can resolve CurrentValue here.
         options.TokenValidationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters
         {
             ValidateIssuerSigningKey = true,
             IssuerSigningKey = new Microsoft.IdentityModel.Tokens.SymmetricSecurityKey(
-                System.Text.Encoding.UTF8.GetBytes(key)),
+                System.Text.Encoding.UTF8.GetBytes(jwtMonitor.CurrentValue.SigningKey)),
             ValidateIssuer = false,
             ValidateAudience = false,
             ValidateLifetime = true,
             ClockSkew = TimeSpan.Zero
         };
-    })
-    .AddJwtBearer(entraJwtScheme, options =>
+    });
+
+builder.Services.AddOptions<JwtBearerOptions>(entraJwtScheme)
+    .Configure<IOptionsMonitor<EntraOptions>>((options, entraMonitor) =>
     {
-        options.Authority = entraAuthority;
+        var entra = entraMonitor.CurrentValue;
+
+        options.Authority = entra.Authority;
         options.TokenValidationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters
         {
-            ValidAudience = entraAudience,
+            ValidAudience = entra.EffectiveAudience,
             ValidateIssuer = true,
             ValidateAudience = true,
             ValidateLifetime = true

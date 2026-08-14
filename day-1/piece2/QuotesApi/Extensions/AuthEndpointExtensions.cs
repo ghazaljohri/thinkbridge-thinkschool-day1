@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using QuotesApi.Data;
 using QuotesApi.Models.Auth;
+using QuotesApi.Options;
 using QuotesApi.Services;
 using QuotesApi.Services.Auth;
 
@@ -15,6 +17,7 @@ public static class AuthEndpointExtensions
             AppDbContext db,
             JwtTokenService tokenService,
             RefreshTokenService refreshTokenService,
+            IOptionsSnapshot<JwtOptions> jwtOptions,
             CancellationToken cancellationToken) =>
         {
             var user = await db.Users
@@ -42,7 +45,7 @@ public static class AuthEndpointExtensions
             {
                 Token = refreshToken,
                 UserId = user.Id,
-                ExpiresAt = DateTime.UtcNow.AddDays(7)
+                ExpiresAt = DateTime.UtcNow.Add(jwtOptions.Value.RefreshTokenLifetime)
             });
 
             await db.SaveChangesAsync(cancellationToken);
@@ -51,7 +54,7 @@ public static class AuthEndpointExtensions
             {
                 access_token = accessToken,
                 refresh_token = refreshToken,
-                expires_in = 1800
+                expires_in = (int)jwtOptions.Value.AccessTokenLifetime.TotalSeconds
             });
         });
 
@@ -60,6 +63,7 @@ public static class AuthEndpointExtensions
             AppDbContext db,
             JwtTokenService tokenService,
             RefreshTokenService refreshTokenService,
+            IOptionsSnapshot<JwtOptions> jwtOptions,
             CancellationToken cancellationToken) =>
         {
             var storedToken = await db.RefreshTokens
@@ -91,7 +95,7 @@ public static class AuthEndpointExtensions
             {
                 Token = newRefreshToken,
                 UserId = user.Id,
-                ExpiresAt = DateTime.UtcNow.AddDays(7)
+                ExpiresAt = DateTime.UtcNow.Add(jwtOptions.Value.RefreshTokenLifetime)
             });
 
             await db.SaveChangesAsync(cancellationToken);
@@ -100,7 +104,7 @@ public static class AuthEndpointExtensions
             {
                 access_token = newAccessToken,
                 refresh_token = newRefreshToken,
-                expires_in = 1800
+                expires_in = (int)jwtOptions.Value.AccessTokenLifetime.TotalSeconds
             });
         });
     }

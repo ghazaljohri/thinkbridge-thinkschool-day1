@@ -414,7 +414,7 @@ public sealed class QuotesApiIntegrationTests(SqlServerContainerFixture sqlServe
     {
         // Arrange
         using var scope = factory.Services.CreateScope();
-        var key = scope.ServiceProvider.GetRequiredService<IConfiguration>()["Jwt:Key"]!;
+        var key = scope.ServiceProvider.GetRequiredService<IConfiguration>()["Jwt:SigningKey"]!;
         var credentials = new SigningCredentials(
             new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key)),
             SecurityAlgorithms.HmacSha256);
