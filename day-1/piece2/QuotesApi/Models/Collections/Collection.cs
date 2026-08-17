@@ -3,7 +3,6 @@ namespace QuotesApi.Models.Collections;
 public class Collection
 {
     private readonly List<CollectionItem> _items = [];
-
     public int Id { get; private set; }
     public string Name { get; private set; } = "";
     public int OwnerId { get; private set; }

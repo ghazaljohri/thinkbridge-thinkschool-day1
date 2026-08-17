@@ -48,6 +48,16 @@ public class QuoteRepository : IQuoteRepository
             .FirstOrDefaultAsync(q => q.Id == id, cancellationToken);
     }
 
+    public async Task<IReadOnlyList<Quote>> GetByIdsAsync(
+        IReadOnlyCollection<int> ids,
+        CancellationToken cancellationToken)
+    {
+        return await _db.Quotes
+            .AsNoTracking()
+            .Where(q => ids.Contains(q.Id))
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task<bool> DeleteAsync(
         int id,
         CancellationToken cancellationToken)

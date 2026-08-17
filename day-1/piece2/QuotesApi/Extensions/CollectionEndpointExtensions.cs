@@ -29,15 +29,29 @@ public static class CollectionEndpointExtensions
         app.MapGet("/api/collections/{id:int}", async (
             int id,
             ICollectionRepository repository,
+            IQuoteRepository quoteRepository,
             CancellationToken cancellationToken) =>
         {
             var collection = await repository.GetByIdAsync(
                 id,
                 cancellationToken);
 
-            return collection is null
-                ? Results.NotFound()
-                : Results.Ok(collection);
+            if (collection is null)
+                return Results.NotFound();
+
+            var quoteIds = collection.Items.Select(i => i.QuoteId).ToList();
+            var quotesById = (await quoteRepository.GetByIdsAsync(quoteIds, cancellationToken))
+                .ToDictionary(q => q.Id);
+
+            var items = collection.Items
+                .Select(item =>
+                {
+                    quotesById.TryGetValue(item.QuoteId, out var quote);
+                    return new CollectionItemResponse(item.QuoteId, quote?.Author, quote?.Text, item.AddedAt);
+                })
+                .ToList();
+
+            return Results.Ok(new CollectionResponse(collection.Id, collection.Name, collection.OwnerId, items));
         });
 
         app.MapDelete("/api/collections/{id:int}", async (
@@ -106,4 +120,16 @@ public static class CollectionEndpointExtensions
 
     public sealed record AddCollectionItemRequest(
         int QuoteId);
+
+    public sealed record CollectionResponse(
+        int Id,
+        string Name,
+        int OwnerId,
+        IReadOnlyList<CollectionItemResponse> Items);
+
+    public sealed record CollectionItemResponse(
+        int QuoteId,
+        string? Author,
+        string? Text,
+        DateTime AddedAt);
 }

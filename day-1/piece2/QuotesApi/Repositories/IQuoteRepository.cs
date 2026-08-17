@@ -17,6 +17,10 @@ public interface IQuoteRepository
         int id,
         CancellationToken cancellationToken);
 
+    Task<IReadOnlyList<Quote>> GetByIdsAsync(
+        IReadOnlyCollection<int> ids,
+        CancellationToken cancellationToken);
+
     Task<bool> DeleteAsync(
         int id,
         CancellationToken cancellationToken);
