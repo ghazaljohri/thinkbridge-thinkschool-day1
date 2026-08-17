@@ -1,6 +1,7 @@
 using QuotesApi.Models;
 using Microsoft.AspNetCore.Authorization;
 using QuotesApi.Repositories;
+using QuotesApi.Services;
 
 namespace QuotesApi.Extensions;
 
@@ -45,6 +46,7 @@ public static class QuoteEndpointExtensions
         app.MapPost("/api/quotes", async (
             QuoteRequest request,
             IQuoteRepository repository,
+            IClock clock,
             ILogger<Program> logger,
             CancellationToken cancellationToken) =>
         {
@@ -52,7 +54,8 @@ public static class QuoteEndpointExtensions
             {
                 var quote = Quote.Create(
                     request.Author,
-                    request.Text);
+                    request.Text,
+                    clock.UtcNow);
 
                 var created = await repository.AddAsync(
                     quote,

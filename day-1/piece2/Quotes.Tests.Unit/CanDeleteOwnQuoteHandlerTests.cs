@@ -16,7 +16,7 @@ public sealed class CanDeleteOwnQuoteHandlerTests
         var handler = new CanDeleteOwnQuoteHandler();
         var user = new ClaimsPrincipal(new ClaimsIdentity(
             [new Claim("email", "  TEST@example.com ")], "Bearer"));
-        var quote = Quote.Create("test@example.COM", "A quote");
+        var quote = Quote.Create("test@example.COM", "A quote", DateTimeOffset.UtcNow);
         var context = new AuthorizationHandlerContext([requirement], user, quote);
 
         // Act
@@ -34,7 +34,7 @@ public sealed class CanDeleteOwnQuoteHandlerTests
         var handler = new CanDeleteOwnQuoteHandler();
         var user = new ClaimsPrincipal(new ClaimsIdentity(
             [new Claim(ClaimTypes.Email, "test@example.com")], "Bearer"));
-        var quote = Quote.Create("test@example.com", "A quote");
+        var quote = Quote.Create("test@example.com", "A quote", DateTimeOffset.UtcNow);
         var context = new AuthorizationHandlerContext([requirement], user, quote);
 
         // Act
@@ -52,7 +52,7 @@ public sealed class CanDeleteOwnQuoteHandlerTests
         var handler = new CanDeleteOwnQuoteHandler();
         var user = new ClaimsPrincipal(new ClaimsIdentity(
             [new Claim("email", "other@example.com")], "Bearer"));
-        var quote = Quote.Create("test@example.com", "A quote");
+        var quote = Quote.Create("test@example.com", "A quote", DateTimeOffset.UtcNow);
         var context = new AuthorizationHandlerContext([requirement], user, quote);
 
         // Act
@@ -69,7 +69,7 @@ public sealed class CanDeleteOwnQuoteHandlerTests
         var requirement = new CanDeleteOwnQuoteRequirement();
         var handler = new CanDeleteOwnQuoteHandler();
         var user = new ClaimsPrincipal(new ClaimsIdentity(authenticationType: "Bearer"));
-        var quote = Quote.Create("test@example.com", "A quote");
+        var quote = Quote.Create("test@example.com", "A quote", DateTimeOffset.UtcNow);
         var context = new AuthorizationHandlerContext([requirement], user, quote);
 
         // Act

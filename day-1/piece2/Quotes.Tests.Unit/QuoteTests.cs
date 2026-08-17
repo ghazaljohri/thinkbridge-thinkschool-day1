@@ -13,7 +13,7 @@ public sealed class QuoteTests
         const string text = "Do the best you can.";
 
         // Act
-        var quote = Quote.Create(author, text);
+        var quote = Quote.Create(author, text, DateTimeOffset.UtcNow);
 
         // Assert
         quote.Author.Should().Be(author);
@@ -28,7 +28,7 @@ public sealed class QuoteTests
     public void Create_MissingAuthor_ThrowsRequiredArgumentException(string author)
     {
         // Arrange
-        var act = () => Quote.Create(author, "A valid quote.");
+        var act = () => Quote.Create(author, "A valid quote.", DateTimeOffset.UtcNow);
 
         // Act
         var exception = act.Should().Throw<ArgumentException>().Which;
@@ -43,7 +43,7 @@ public sealed class QuoteTests
     {
         // Arrange
         var author = new string('A', 201);
-        var act = () => Quote.Create(author, "A valid quote.");
+        var act = () => Quote.Create(author, "A valid quote.", DateTimeOffset.UtcNow);
 
         // Act
         var exception = act.Should().Throw<ArgumentException>().Which;
@@ -60,7 +60,7 @@ public sealed class QuoteTests
     public void Create_MissingText_ThrowsRequiredArgumentException(string text)
     {
         // Arrange
-        var act = () => Quote.Create("Author", text);
+        var act = () => Quote.Create("Author", text, DateTimeOffset.UtcNow);
 
         // Act
         var exception = act.Should().Throw<ArgumentException>().Which;
@@ -75,7 +75,7 @@ public sealed class QuoteTests
     {
         // Arrange
         var text = new string('T', 1001);
-        var act = () => Quote.Create("Author", text);
+        var act = () => Quote.Create("Author", text, DateTimeOffset.UtcNow);
 
         // Act
         var exception = act.Should().Throw<ArgumentException>().Which;
@@ -89,7 +89,7 @@ public sealed class QuoteTests
     public void SoftDelete_ActiveQuote_MarksQuoteDeleted()
     {
         // Arrange
-        var quote = Quote.Create("Author", "A valid quote.");
+        var quote = Quote.Create("Author", "A valid quote.", DateTimeOffset.UtcNow);
 
         // Act
         quote.SoftDelete();

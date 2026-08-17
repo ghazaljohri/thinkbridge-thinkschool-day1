@@ -451,7 +451,7 @@ public sealed class QuotesApiIntegrationTests(SqlServerContainerFixture sqlServe
         // Arrange
         using var scope = factory.Services.CreateScope();
         var database = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var quote = Quote.Create(author, text);
+        var quote = Quote.Create(author, text, DateTimeOffset.UtcNow);
 
         // Act
         database.Quotes.Add(quote);

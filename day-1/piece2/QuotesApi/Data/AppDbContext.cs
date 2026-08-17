@@ -22,6 +22,16 @@ public class AppDbContext : DbContext
     {
         base.OnModelCreating(modelBuilder);
 
+        modelBuilder.Entity<Quote>(entity =>
+        {
+            entity.HasKey(q => q.Id);
+
+            entity.Property(q => q.CreatedAtUtc)
+                .IsRequired();
+
+            entity.HasIndex(q => q.Author);
+        });
+
         modelBuilder.Entity<User>(entity =>
         {
             entity.HasKey(u => u.Id);

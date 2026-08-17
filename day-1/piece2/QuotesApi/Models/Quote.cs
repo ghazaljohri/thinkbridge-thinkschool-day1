@@ -6,14 +6,16 @@ public class Quote
     public string Author { get; private set; }
     public string Text { get; private set; }
     public bool IsDeleted { get; private set; }
+    public DateTimeOffset CreatedAtUtc { get; private set; }
 
-    private Quote(string author, string text)
+    private Quote(string author, string text, DateTimeOffset createdAtUtc)
     {
         Author = author;
         Text = text;
+        CreatedAtUtc = createdAtUtc;
     }
 
-    public static Quote Create(string author, string text)
+    public static Quote Create(string author, string text, DateTimeOffset createdAtUtc)
     {
         if (string.IsNullOrWhiteSpace(author))
             throw new ArgumentException("Author is required.", nameof(author));
@@ -27,7 +29,7 @@ public class Quote
         if (text.Length > 1000)
             throw new ArgumentException("Text must be 1000 characters or fewer.", nameof(text));
 
-        return new Quote(author, text);
+        return new Quote(author, text, createdAtUtc);
     }
 
     public void SoftDelete()
