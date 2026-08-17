@@ -192,6 +192,7 @@ builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddScoped<JwtTokenService>();
 builder.Services.AddScoped<RefreshTokenService>();
+builder.Services.AddHealthChecks();
 
 var app = builder.Build();
 
@@ -218,6 +219,7 @@ app.UseAuthorization();
 await app.ApplyMigrationsAsync();
 
 app.MapGet("/", () => "Quotes API is running!");
+app.MapHealthChecks("/health");
 app.MapAuthEndpoints();
 
 using (var scope = app.Services.CreateScope())
