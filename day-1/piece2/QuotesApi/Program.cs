@@ -107,6 +107,14 @@ builder.Services.AddOptions<EntraOptions>()
     .ValidateDataAnnotations()
     .ValidateOnStart();
 
+// Entra ID's OIDC metadata + JWKS fetch (used internally by the JWT bearer handler's
+// ConfigurationManager to validate Entra-issued tokens) is the one outbound call this
+// API makes to another service. Wrapped in retry/circuit-breaker/timeout so a transient
+// Entra outage degrades gracefully - failed lookups are retried and logged instead of
+// hanging every Entra-scheme request or failing silently.
+builder.Services.AddHttpClient("EntraMetadata")
+    .AddDefaultResilience("EntraMetadata");
+
 builder.Services.AddAuthentication(options =>
     {
         options.DefaultAuthenticateScheme = bearerScheme;
@@ -149,11 +157,14 @@ builder.Services.AddOptions<JwtBearerOptions>(localJwtScheme)
     });
 
 builder.Services.AddOptions<JwtBearerOptions>(entraJwtScheme)
-    .Configure<IOptionsMonitor<EntraOptions>>((options, entraMonitor) =>
+    .Configure<IOptionsMonitor<EntraOptions>, IHttpClientFactory>((options, entraMonitor, httpClientFactory) =>
     {
         var entra = entraMonitor.CurrentValue;
 
         options.Authority = entra.Authority;
+        // Routes the metadata/JWKS fetch through the resilience-wrapped client above
+        // instead of the handler's own unprotected default HttpClient.
+        options.Backchannel = httpClientFactory.CreateClient("EntraMetadata");
         options.TokenValidationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters
         {
             ValidAudience = entra.EffectiveAudience,
