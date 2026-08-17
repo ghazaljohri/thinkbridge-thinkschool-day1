@@ -8,9 +8,18 @@
   </PropertyGroup>
 
   <PropertyGroup>
-    <ContainerImageName>quotes-api</ContainerImageName>
+    <!-- ContainerRepository, not the obsolete ContainerImageName: azd's own `dotnet publish`
+         invocation passes -p:ContainerRepository=... to control where the image lands, and
+         the SDK's compat shim lets a project-set ContainerImageName silently win over that
+         override regardless of command-line precedence rules - which sent every azd deploy's
+         image to the wrong ACR repository path. -->
+    <ContainerRepository>quotes-api</ContainerRepository>
     <ContainerImageTag>0.1.0</ContainerImageTag>
-    <ContainerBaseImage>mcr.microsoft.com/dotnet/aspnet:10.0-alpine</ContainerBaseImage>
+    <!-- Not the alpine (musl) variant: azd's dotnet publish invocation always passes an
+         explicit `-r linux-x64` (glibc), which overrides any RuntimeIdentifier set here -
+         there is no project-level way to make azd target musl, so the base image has to be
+         glibc-compatible for azd-driven deploys to work at all. -->
+    <ContainerBaseImage>mcr.microsoft.com/dotnet/aspnet:10.0</ContainerBaseImage>
   </PropertyGroup>
 
   <ItemGroup>
