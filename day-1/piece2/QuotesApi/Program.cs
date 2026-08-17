@@ -19,15 +19,16 @@ using Serilog.Sinks.ApplicationInsights.TelemetryConverters;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// KeyVault:Uri is intentionally absent from every checked-in appsettings file - it's
-// set only via the KeyVault__Uri environment variable for local runs against real
-// Azure Monitor. Left unset (as in tests and CI), no Key Vault call is made at all,
-// so this can't add latency or an Azure dependency to the test suite. Fetched before
-// UseSerilog/UseAzureMonitor below since both need it.
+// Prefer APPLICATIONINSIGHTS_CONNECTION_STRING directly - Container Apps hosting (e.g.
+// azd's generated Bicep) wires it straight onto the container as a plain env var, and
+// ASP.NET Core's default configuration already includes environment variables with no
+// prefix, so it's just there. Key Vault is a separate, secondary path for deployments
+// that source the same secret from a vault instead (KeyVault:Uri, unset by default so
+// tests/CI never make an Azure call).
 var keyVaultUri = builder.Configuration["KeyVault:Uri"];
-string? appInsightsConnectionString = null;
+string? appInsightsConnectionString = builder.Configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"];
 
-if (!string.IsNullOrWhiteSpace(keyVaultUri))
+if (string.IsNullOrWhiteSpace(appInsightsConnectionString) && !string.IsNullOrWhiteSpace(keyVaultUri))
 {
     // DefaultAzureCredential probes Managed Identity first, which means reaching the
     // Azure Instance Metadata Service - on a real Azure host that resolves almost

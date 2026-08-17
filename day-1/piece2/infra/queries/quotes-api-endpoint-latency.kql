@@ -1,0 +1,11 @@
+// Reusable App Insights query: per-endpoint request count and latency percentiles.
+// Resource: appi-3kjx6gefa6seo (rg-thinkschool-dev-shared), workspace log-3kjx6gefa6seo.
+//
+// Intended to be saved as a Log Analytics function (Logs tab -> Save -> Function) named
+// QuotesApiEndpointLatency. Saving it via the CLI/ARM API in this workspace requires a
+// storage account linked to the Query data source type, which this environment doesn't
+// have provisioned - so it's saved here as a checked-in, reusable query instead.
+requests
+| where timestamp > ago(30m)
+| summarize count(), p50=percentile(duration, 50), p99=percentile(duration, 99) by name
+| order by p99 desc
