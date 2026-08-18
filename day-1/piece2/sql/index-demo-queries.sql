@@ -83,3 +83,39 @@ GO
 -- and inspect the returned plan's RelOp/@PhysicalOp and EstimateRows/@ActualRows
 -- attributes - that's what confirmed Table Scan vs Index Seek vs Clustered
 -- Index Seek above, and that estimated row counts closely matched actual ones.
+
+-- ============================================================================
+-- WRITE-SIDE COST: the same 10,000-row insert, measured once against the bare
+-- heap (before any of the three indexes above existed) and once with all
+-- three indexes live, table reset to the same 100,000-row starting size both
+-- times for a fair comparison.
+-- ============================================================================
+SET STATISTICS IO ON;
+SET STATISTICS TIME ON;
+GO
+
+;WITH L0 AS (SELECT 1 AS c UNION ALL SELECT 1),
+L1 AS (SELECT 1 AS c FROM L0 A CROSS JOIN L0 B),
+L2 AS (SELECT 1 AS c FROM L1 A CROSS JOIN L1 B),
+L3 AS (SELECT 1 AS c FROM L2 A CROSS JOIN L2 B),
+Nums AS (SELECT TOP (10000) ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS N FROM L3 A CROSS JOIN L3 B)
+INSERT INTO QuoteViews (QuoteId, ViewedAtUtc, ViewerIp, DurationMs)
+SELECT
+    1 + ABS(CHECKSUM(NEWID())) % 500,
+    DATEADD(SECOND, N, '2026-02-01T00:00:00'),
+    CONCAT(1 + ABS(CHECKSUM(NEWID())) % 255, '.', 1 + ABS(CHECKSUM(NEWID())) % 255, '.0.1'),
+    10 + ABS(CHECKSUM(NEWID())) % 5000
+FROM Nums;
+-- Heap (no indexes):        10,057 logical reads, ~25ms CPU.
+-- All 3 indexes present:    86,801 reads on QuoteViews + 20,382 on a sort
+--                            worktable (~107k total), ~89ms CPU - roughly
+--                            3.5x the time and ~10x the logical I/O for the
+--                            identical insert, since every row now has to
+--                            maintain a clustered B-tree position plus update
+--                            two non-clustered structures instead of just
+--                            appending to a heap.
+GO
+
+SET STATISTICS IO OFF;
+SET STATISTICS TIME OFF;
+GO
