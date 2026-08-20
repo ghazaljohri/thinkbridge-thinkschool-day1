@@ -1,4 +1,5 @@
 <Solution>
+  <Project Path="EfCoreTrackingBenchmark/EfCoreTrackingBenchmark.csproj" />
   <Project Path="Quotes.Tests.Integration/Quotes.Tests.Integration.csproj" />
   <Project Path="Quotes.Tests.Unit/Quotes.Tests.Unit.csproj" />
   <Project Path="QuotesApi.Tests.Domain/QuotesApi.Tests.Domain.csproj" />
