@@ -8,7 +8,6 @@ public class Collection
     public int OwnerId { get; private set; }
 
     public IReadOnlyCollection<CollectionItem> Items => _items.AsReadOnly();
-
     private Collection() { }
 
     public Collection(string name, int ownerId)
