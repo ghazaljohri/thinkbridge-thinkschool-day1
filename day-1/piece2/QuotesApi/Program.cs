@@ -251,6 +251,7 @@ using (var scope = app.Services.CreateScope())
 }
 app.MapQuoteEndpoints();
 app.MapCollectionEndpoints();
+app.MapAuthorEndpoints();
 
 app.Run();
 
