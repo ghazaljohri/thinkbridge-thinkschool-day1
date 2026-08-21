@@ -145,7 +145,7 @@ namespace Quotes.Tests.Integration.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("Author");
+                    b.HasIndex("Author", "CreatedAtUtc");
 
                     b.ToTable("Quotes");
                 });

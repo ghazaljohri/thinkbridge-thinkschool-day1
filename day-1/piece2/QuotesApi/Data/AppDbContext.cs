@@ -29,7 +29,11 @@ public class AppDbContext : DbContext
             entity.Property(q => q.CreatedAtUtc)
                 .IsRequired();
 
-            entity.HasIndex(q => q.Author);
+            // Composite, not just (Author): the authors-summary query
+            // partitions by Author and orders by CreatedAtUtc within each
+            // partition, so the index needs both columns to avoid a sort
+            // step per group.
+            entity.HasIndex(q => new { q.Author, q.CreatedAtUtc });
         });
 
         modelBuilder.Entity<User>(entity =>
