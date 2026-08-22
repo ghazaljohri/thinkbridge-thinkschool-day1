@@ -1,4 +1,5 @@
 using QuotesApi.Models.Collections;
+using QuotesApi.Queries;
 using QuotesApi.Repositories;
 using QuotesApi.Services;
 
@@ -8,6 +9,19 @@ public static class CollectionEndpointExtensions
 {
     public static void MapCollectionEndpoints(this WebApplication app)
     {
+        // Read side: goes straight to ICollectionQueries, never touches
+        // ICollectionRepository or the Collection aggregate.
+        app.MapGet("/api/collections", async (
+            int ownerId,
+            ICollectionQueries queries,
+            CancellationToken cancellationToken) =>
+        {
+            var summaries = await queries.GetSummariesByOwnerAsync(ownerId, cancellationToken);
+            return Results.Ok(summaries);
+        });
+
+        // Write side: goes through the Collection aggregate so its
+        // invariants (name length, non-empty name) are enforced.
         app.MapPost("/api/collections", async (
             CollectionRequest request,
             ICollectionRepository repository,
@@ -28,30 +42,19 @@ public static class CollectionEndpointExtensions
 
         app.MapGet("/api/collections/{id:int}", async (
             int id,
-            ICollectionRepository repository,
-            IQuoteRepository quoteRepository,
+            ICollectionQueries queries,
             CancellationToken cancellationToken) =>
         {
-            var collection = await repository.GetByIdAsync(
-                id,
-                cancellationToken);
+            var detail = await queries.GetDetailAsync(id, cancellationToken);
 
-            if (collection is null)
+            if (detail is null)
                 return Results.NotFound();
 
-            var quoteIds = collection.Items.Select(i => i.QuoteId).ToList();
-            var quotesById = (await quoteRepository.GetByIdsAsync(quoteIds, cancellationToken))
-                .ToDictionary(q => q.Id);
-
-            var items = collection.Items
-                .Select(item =>
-                {
-                    quotesById.TryGetValue(item.QuoteId, out var quote);
-                    return new CollectionItemResponse(item.QuoteId, quote?.Author, quote?.Text, item.AddedAt);
-                })
+            var items = detail.Items
+                .Select(item => new CollectionItemResponse(item.QuoteId, item.Author, item.Text, item.AddedAt))
                 .ToList();
 
-            return Results.Ok(new CollectionResponse(collection.Id, collection.Name, collection.OwnerId, items));
+            return Results.Ok(new CollectionResponse(detail.Id, detail.Name, detail.OwnerId, items));
         });
 
         app.MapDelete("/api/collections/{id:int}", async (
@@ -129,7 +132,7 @@ public static class CollectionEndpointExtensions
 
     public sealed record CollectionItemResponse(
         int QuoteId,
-        string? Author,
-        string? Text,
+        string Author,
+        string Text,
         DateTime AddedAt);
 }

@@ -251,6 +251,32 @@ public sealed class QuotesApiIntegrationTests(SqlServerContainerFixture sqlServe
     }
 
     [Fact]
+    public async Task GetCollectionsByOwner_MultipleCollectionsForOwner_ReturnsSummariesOnlyForThatOwner()
+    {
+        // Arrange
+        await using var factory = new QuotesApiFactory(sqlServer);
+        using var client = factory.CreateClient();
+        var quoteId = await SeedQuoteAsync(factory, "test@example.com", "Stored quote");
+        var owned = GetId(await client.PostAsJsonAsync(
+            "/api/collections", new CollectionEndpointExtensions.CollectionRequest("Favourites", 1)));
+        await client.PostAsJsonAsync(
+            "/api/collections", new CollectionEndpointExtensions.CollectionRequest("Someone Else's", 2));
+        await client.PostAsJsonAsync(
+            $"/api/collections/{owned}/items",
+            new CollectionEndpointExtensions.AddCollectionItemRequest(quoteId));
+
+        // Act
+        var response = await client.GetAsync("/api/collections?ownerId=1");
+        var summaries = await response.Content.ReadFromJsonAsync<List<CollectionSummaryResponse>>();
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        summaries.Should().ContainSingle();
+        summaries!.Single().Id.Should().Be(owned);
+        summaries.Single().ItemCount.Should().Be(1);
+    }
+
+    [Fact]
     public async Task GetCollection_ExistingAndMissingCollection_ReturnsOkThenNotFound()
     {
         // Arrange
@@ -497,6 +523,8 @@ public sealed class QuotesApiIntegrationTests(SqlServerContainerFixture sqlServe
     private sealed record CollectionResponse(List<CollectionItemResponse> Items);
 
     private sealed record CollectionItemResponse(int QuoteId, DateTime AddedAt);
+
+    private sealed record CollectionSummaryResponse(int Id, string Name, int OwnerId, int ItemCount, DateTime? LastAddedAt);
 
     private sealed record ProblemDetailsResponse(
         string? Title,
